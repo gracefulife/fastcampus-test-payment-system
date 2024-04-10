@@ -19,6 +19,7 @@ public class WalletService {
 
     @Transactional
     public CreateWalletResponse createWallet(CreateWalletRequest request) {
+        // FIXME
         boolean isWalletExist = walletRepository.findWalletByUserId(request.userId())
                 .isPresent();
         if (isWalletExist) {
@@ -42,6 +43,7 @@ public class WalletService {
 
     @Transactional
     public AddBalanceWalletResponse addBalance(AddBalanceWalletRequest request) {
+        // FIXME
         /*
         1. 잔액이 마이너스가 되면 오류가 발생해야 한다.
         2. 최대 충전한도는 10만원이다.
