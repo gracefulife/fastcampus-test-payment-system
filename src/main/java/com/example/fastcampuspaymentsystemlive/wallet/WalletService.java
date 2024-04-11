@@ -41,6 +41,14 @@ public class WalletService {
                 .orElse(null);
     }
 
+    public FindWalletResponse findWalletByWalletId(Long walletId) {
+        return walletRepository.findById(walletId)
+                .map(wallet -> new FindWalletResponse(
+                        wallet.getId(), wallet.getUserId(), wallet.getBalance(),
+                        wallet.getCreatedAt(), wallet.getUpdatedAt()
+                ))
+                .orElse(null);
+    }
     @Transactional
     public AddBalanceWalletResponse addBalance(AddBalanceWalletRequest request) {
         // FIXME
