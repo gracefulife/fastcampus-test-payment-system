@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -60,5 +60,17 @@ public class TransactionService {
         transactionRepository.save(transaction);
 
         return new PaymentTransactionResponse(wallet.id(), wallet.balance());
+    }
+
+    public void pgPayment() {
+        // TODO not yet implements
+        // 여러분들의 구현
+        final Transaction transaction = Transaction.createPaymentTransaction(
+                1L, null,
+                "10", new BigDecimal(1000)
+        );
+        transactionRepository.save(
+                transaction
+        );
     }
 }

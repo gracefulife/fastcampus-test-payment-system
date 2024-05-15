@@ -1,32 +1,56 @@
 package com.example.fastcampuspaymentsystemlive.checkout;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.fastcampuspaymentsystemlive.order.Order;
+import com.example.fastcampuspaymentsystemlive.order.OrderRepository;
+import com.example.fastcampuspaymentsystemlive.processing.PaymentProcessingService;
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.client.RestClient;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Slf4j
 @Controller
+@AllArgsConstructor
 public class CheckoutController {
-    // TODO
-    /*
-    1. checkout 페이지 렌더링 시 orderId 를 만들어주어야 한다.
-        1.1 주문서비스로부터 오는걸 가정 ..
-    2. PG 와 주고받은 데이터를 저장할필요가 있음.
-        2.1 요청 > 승인
-        2.2 요청 데이터도 저장.
-        2.3 승인 데이터도 저장.
-    3. 상품구매 API 와 연결
-     */
+    private final OrderRepository orderRepository;
+    private final PaymentProcessingService paymentProcessingService;
+
+    @GetMapping("/order")
+    public String order(
+            @RequestParam("userId") Long userId,
+            @RequestParam("courseId") Long courseId,
+            @RequestParam("courseName") String courseName,
+            @RequestParam("amount") String amount,
+            Model model
+    ) {
+        Order order = new Order();
+        order.setAmount(new BigDecimal(amount));
+        order.setCourseId(courseId);
+        order.setCourseName(courseName);
+        order.setUserId(userId);
+        order.setRequestId(UUID.randomUUID().toString());
+        order.setStatus(Order.Status.WAIT);
+        order.setCreatedAt(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
+        orderRepository.save(order);
+
+        model.addAttribute("courseName", courseName);
+        model.addAttribute("requestId", order.getRequestId());
+        model.addAttribute("amount", amount);
+        model.addAttribute("customerKey", "customerKey-" + userId);
+        return "/order.html";
+    }
+
+    @GetMapping("/order-requested")
+    public String orderRequested() {
+        return "/order-requested.html";
+    }
 
     @GetMapping("/checkout")
     public String checkout() {
@@ -43,37 +67,30 @@ public class CheckoutController {
         return "/fail.html";
     }
 
-    @RequestMapping(value = "/confirm")
-    public ResponseEntity<Object> confirmPayment(@RequestBody String jsonBody) throws Exception {
-        final JsonNode jsonNode = new ObjectMapper().readTree(jsonBody);
-        final ConfirmRequest request = new ConfirmRequest(
-                jsonNode.get("paymentKey").asText(),
-                jsonNode.get("orderId").asText(),
-                jsonNode.get("amount").asText()
-        );
+    @RequestMapping(method = RequestMethod.POST, value = "/confirm")
+    public ResponseEntity<Object> confirmPayment(
+            @RequestBody ConfirmRequest confirmRequest) throws Exception {
+        /*
+        1. 주문 서비스 - 주문 상태가 변경 됨 > REQUESTED
+        2. 주문서비스 > 결제서비스 승인 요청 (POST API /confirm)
+        3. 결제서비스 > PG 승인 요청
+        4. 결제서비스 > 결제기록 저장
+            > 결제수단으로 바로 결제하는 메서드 구현
+        ...
+        6. 주문서비스에 응답
+        7. 주문을 APPROVED 상태로 변경
+         */
 
-        // 토스페이먼츠 API는 시크릿 키를 사용자 ID로 사용하고, 비밀번호는 사용하지 않습니다.
-        // 비밀번호가 없다는 것을 알리기 위해 시크릿 키 뒤에 콜론을 추가합니다.
-        String widgetSecretKey = "test_gsk_docs_OaPz8L5KdmQXkzRz3y47BMw6";
-        Base64.Encoder encoder = Base64.getEncoder();
-        byte[] encodedBytes = encoder.encode((widgetSecretKey + ":").getBytes(StandardCharsets.UTF_8));
-        String authorizations = "Basic " + new String(encodedBytes);
+        // 1번
+        Order order = orderRepository.findByRequestId(confirmRequest.orderId());
+        order.setUpdatedAt(LocalDateTime.now());
+        order.setStatus(Order.Status.REQUESTED);
+        orderRepository.save(order);
 
-        RestClient defaultClient = RestClient.create();
-        final Object object = defaultClient.post()
-                .uri("https://api.tosspayments.com/v1/payments/confirm")
-                .headers(httpHeaders -> {
-                    httpHeaders.add("Authorization", authorizations);
-                    httpHeaders.add("Content-Type", "application/json");
-                })
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .toEntity(Object.class);
+        // 2번.
+        paymentProcessingService.createPayment(confirmRequest);
 
-        return ResponseEntity.ok(object);
-    }
 
-    public record ConfirmRequest(String paymentKey, String orderId, String amount) {
+        return ResponseEntity.ok(null);
     }
 }
