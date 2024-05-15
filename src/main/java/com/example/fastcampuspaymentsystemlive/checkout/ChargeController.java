@@ -17,22 +17,18 @@ import java.util.UUID;
 @Slf4j
 @Controller
 @AllArgsConstructor
-public class CheckoutController {
+public class ChargeController {
     private final OrderRepository orderRepository;
     private final PaymentProcessingService paymentProcessingService;
 
-    @GetMapping("/order")
+    @GetMapping("/charge-order")
     public String order(
             @RequestParam("userId") Long userId,
-            @RequestParam("courseId") Long courseId,
-            @RequestParam("courseName") String courseName,
             @RequestParam("amount") String amount,
             Model model
     ) {
         Order order = new Order();
         order.setAmount(new BigDecimal(amount));
-        order.setCourseId(courseId);
-        order.setCourseName(courseName);
         order.setUserId(userId);
         order.setRequestId(UUID.randomUUID().toString());
         order.setStatus(Order.Status.WAIT);
@@ -40,25 +36,24 @@ public class CheckoutController {
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
 
-        model.addAttribute("courseName", courseName);
         model.addAttribute("requestId", order.getRequestId());
         model.addAttribute("amount", amount);
         model.addAttribute("customerKey", "customerKey-" + userId);
-        return "/order.html";
+        return "/charge-order.html";
     }
 
-    @GetMapping("/order-requested")
+    @GetMapping("/charge-order-requested")
     public String orderRequested() {
-        return "/order-requested.html";
+        return "/charge-order-requested.html";
     }
 
-    @GetMapping("/fail")
+    @GetMapping("/charge-fail")
     public String fail() {
-        return "/fail.html";
+        return "/charge-fail.html";
     }
 
-    @RequestMapping(method = RequestMethod.POST, value = "/confirm")
-    public ResponseEntity<Object> confirmPayment(
+    @RequestMapping(method = RequestMethod.POST, value = "/charge-confirm")
+    public ResponseEntity<Object> confirm(
             @RequestBody ConfirmRequest confirmRequest) throws Exception {
         // 1번
         Order order = orderRepository.findByRequestId(confirmRequest.orderId());
@@ -67,7 +62,7 @@ public class CheckoutController {
         orderRepository.save(order);
 
         // 2번.
-        paymentProcessingService.createPayment(confirmRequest);
+        paymentProcessingService.createCharge(confirmRequest);
 
 
         return ResponseEntity.ok(null);
