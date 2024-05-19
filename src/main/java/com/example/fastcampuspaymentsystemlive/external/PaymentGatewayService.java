@@ -45,7 +45,7 @@ public class PaymentGatewayService {
                 .body(confirmRequest)
                 .retrieve()
                 .toEntity(Object.class);
-
+        // 타임아웃 같은 케이스는 바로 exception 이 throw 됨
         if (object.getStatusCode().isError()) {
             throw new IllegalStateException("결제 요청이 실패했습니다.");
         }

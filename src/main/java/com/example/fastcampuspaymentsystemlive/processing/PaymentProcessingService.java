@@ -4,14 +4,22 @@ import com.example.fastcampuspaymentsystemlive.checkout.ConfirmRequest;
 import com.example.fastcampuspaymentsystemlive.external.PaymentGatewayService;
 import com.example.fastcampuspaymentsystemlive.order.Order;
 import com.example.fastcampuspaymentsystemlive.order.OrderRepository;
+import com.example.fastcampuspaymentsystemlive.retry.RetryRequestRepository;
+import com.example.fastcampuspaymentsystemlive.retry.RetryRequest;
 import com.example.fastcampuspaymentsystemlive.transaction.ChargeTransactionRequest;
 import com.example.fastcampuspaymentsystemlive.transaction.TransactionService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
+import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @AllArgsConstructor
 public class PaymentProcessingService {
@@ -19,6 +27,9 @@ public class PaymentProcessingService {
     private final TransactionService transactionService;
 
     private final OrderRepository orderRepository;
+
+    private final RetryRequestRepository retryRequestRepository;
+    private final ObjectMapper objectMapper;
 
     public void createPayment(ConfirmRequest confirmRequest) {
         /*
@@ -35,7 +46,7 @@ public class PaymentProcessingService {
         approveOrder(confirmRequest.orderId());
     }
 
-    public void createCharge(ConfirmRequest confirmRequest) {
+    public void createCharge(ConfirmRequest confirmRequest, boolean isRetry) {
         /*
         .. 주문서비스 프로세스
         3. 결제서비스 > PG 승인 요청
@@ -45,7 +56,16 @@ public class PaymentProcessingService {
         6. 주문서비스에 응답
         7. 주문을 APPROVED 상태로 변경
          */
-        paymentGatewayService.confirm(confirmRequest);
+        try {
+            paymentGatewayService.confirm(confirmRequest);
+        } catch (Exception e) {
+            log.error("caught exception on createCharge", e);
+            if (!isRetry && e instanceof RestClientException &&
+                    e.getCause() instanceof SocketTimeoutException) {
+                createRetryRequest(confirmRequest, e);
+            }
+            throw e;
+        }
 
         final Order order = orderRepository.findByRequestId(confirmRequest.orderId());
         transactionService.charge(
@@ -57,6 +77,17 @@ public class PaymentProcessingService {
         );
 
         approveOrder(confirmRequest.orderId());
+    }
+
+    @SneakyThrows
+    private void createRetryRequest(ConfirmRequest confirmRequest, Exception e) {
+        RetryRequest retryRequest = new RetryRequest(
+                objectMapper.writeValueAsString(confirmRequest),
+                confirmRequest.orderId(),
+                e.getMessage(),
+                RetryRequest.Type.CONFIRM
+        );
+        retryRequestRepository.save(retryRequest);
     }
 
     private void approveOrder(String orderId) {

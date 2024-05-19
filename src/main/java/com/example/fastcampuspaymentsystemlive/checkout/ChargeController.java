@@ -62,7 +62,7 @@ public class ChargeController {
         orderRepository.save(order);
 
         // 2번.
-        paymentProcessingService.createCharge(confirmRequest);
+        paymentProcessingService.createCharge(confirmRequest, false);
 
 
         return ResponseEntity.ok(null);
