@@ -32,6 +32,7 @@ public class WalletService {
                 wallet.getId(), wallet.getUserId(), wallet.getBalance());
     }
 
+    @Transactional
     public FindWalletResponse findWalletByUserId(Long userId) {
         return walletRepository.findTopByUserId(userId)
                 .map(wallet -> new FindWalletResponse(
