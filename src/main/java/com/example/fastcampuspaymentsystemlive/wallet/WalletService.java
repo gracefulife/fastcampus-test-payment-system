@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 @Service
 public class WalletService {
-    private static final BigDecimal BALANCE_LIMIT = new BigDecimal(100_000);
+    private static final BigDecimal BALANCE_LIMIT = new BigDecimal(10_000_000_000L);
 
     private final WalletRepository walletRepository;
 
